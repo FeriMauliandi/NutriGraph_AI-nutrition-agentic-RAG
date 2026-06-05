@@ -13,23 +13,15 @@ from src.agents.nodes import (
     synthesizer_node
 )
 
-# ==========================================
-# INISIALISASI GRAPH
-# ==========================================
-# Membangun graph dengan memori state yang sudah didefinisikan
+# Inisialisasi StateGraph
 workflow = StateGraph(DietaryTrackerState)
 
-# ==========================================
-# MENDAFTARKAN NODES (SIMPUL)
-# ==========================================
+# Daftarkan semua nodes
 workflow.add_node("extraction", extraction_node)
 workflow.add_node("api_tool", api_tool_node)
 workflow.add_node("rag", rag_node)
 workflow.add_node("synthesizer", synthesizer_node)
 
-# ==========================================
-# MENGATUR EDGES (ALUR KERJA / JALUR)
-# ==========================================
 # 1. Tentukan titik masuk (Entry Point)
 workflow.set_entry_point("extraction")
 
@@ -47,15 +39,10 @@ workflow.add_edge("rag", "synthesizer")
 # 4. Titik Akhir
 workflow.add_edge("synthesizer", END)
 
-# ==========================================
-# KOMPILASI GRAPH
-# ==========================================
 # Compile mengubah definisi graph ini menjadi objek yang bisa dieksekusi (Runnable)
 app = workflow.compile()
 
-# ==========================================
-# BLOK PENGUJIAN LOKAL (TESTING)
-# ==========================================
+#   --- BLOK PENGUJIAN ---
 if __name__ == "__main__":
     print("🚀 === MEMULAI SIMULASI AGENTIC RAG ===")
     

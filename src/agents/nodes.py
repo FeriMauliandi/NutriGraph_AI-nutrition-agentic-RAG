@@ -2,27 +2,17 @@ from typing import Dict, Any
 from langchain_groq import ChatGroq
 from langchain_core.prompts import PromptTemplate
 
-# Impor dari arsitektur internal
 from src.agents.state import DietaryTrackerState
 from src.core.config import settings
 from src.database.vector_store import get_hybrid_retriever
 from src.tools.nutrition_api import fetch_nutrition_data
 
-# ==========================================
-# INISIALISASI LLM & RETRIEVER
-# ==========================================
 llm = ChatGroq(
     model=settings.LLM_MODEL,
     temperature=0, 
-    max_tokens=1024
 )
 
-# Memanggil Hybrid Retriever yang sudah dirakit di vector_store.py
 retriever = get_hybrid_retriever(k=3)
-
-# ==========================================
-# FUNGSI AGEN (NODES)
-# ==========================================
 
 def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
     print("🤖 [Extraction Node] Sedang mengekstrak entitas...")
@@ -37,40 +27,41 @@ def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
     return {"extracted_items": items}
 
 def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
-    print("🛠️ [API Tool Node] Mengambil data makronutrien dari USDA...")
+    print("[API Tool Node] Mengambil data makronutrien dari USDA...")
     items = state.get("extracted_items", [])
     if not items:
         return {"nutrition_data": {"summary": "Tidak ada data makanan untuk dianalisis."}}
     
     nutrition_result = fetch_nutrition_data(items)
+    print(f"[API Tool Node] Hasil nutrisi: {nutrition_result}    ")
     return {"nutrition_data": nutrition_result}
 
 def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
-    print("📚 [RAG Node] Melakukan Hybrid Search (BM25 + Vector) di database...")
+    print("[RAG Node] Melakukan Hybrid Search (BM25 + Vector) di database...")
     user_input = state["user_input"]
     
     try:
-        # Perintah invoke() ini sekarang otomatis mengeksekusi Ensemble (Vektor & BM25)
         docs = retriever.invoke(user_input)
         context = "\n\n".join(doc.page_content for doc in docs)
         
         if not context:
             context = "Tidak ada literatur spesifik yang ditemukan di database."
-            
+        
+        print(f"[RAG Node] Literatur yang ditemukan:\n{context}\n ================================")
         return {"literature_context": context}
     except Exception as e:
-        print(f"⚠️ [RAG Node] Error: {e}")
+        print(f"[RAG Node] Error: {e}")
         return {"literature_context": "", "error_logs": [f"RAG Error: {str(e)}"]}
 
 def synthesizer_node(state: DietaryTrackerState) -> Dict[str, Any]:
-    print("🧠 [Synthesizer Node] Merumuskan analisis akhir...")
+    print("[Synthesizer Node] Merumuskan analisis akhir...")
     prompt = PromptTemplate.from_template(
         "Kamu adalah konsultan kebugaran dan nutrisi berbasis sains.\n\n"
         "Berdasarkan Makanan yang dikonsumsi: {items}\n"
         "Data Nutrisi (Estimasi): {nutrition}\n"
-        "Literatur Medis Pendukung: {context}\n\n"
-        "Berikan analisis komprehensif untuk pengguna. Apakah asupannya sudah ideal? "
-        "Gunakan bahasa Indonesia yang profesional dan empatik."
+        "Literatur nutrisi Pendukung jika data tidak cukup: {context}\n\n"
+        "Berikan analisis nutrisi per item untuk pengguna dan jelaskan apakah asupannya sudah ideal? "
+        "Gunakan bahasa Indonesia yang profesional dan singkat. Sertakan rekomendasi jika ada kekurangan nutrisi."
     )
     chain = prompt | llm
     response = chain.invoke({

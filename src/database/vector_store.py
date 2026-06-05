@@ -7,7 +7,7 @@ from langchain_core.documents import Document
 from src.core.config import settings
 
 def get_hybrid_retriever(search_type="similarity", k=3):
-    print(f"🔌 Menyiapkan Hybrid Retriever (Vektor + BM25, Mengambil {k} dokumen)...")
+    print(f"menyiapkan Hybrid Retriever dengan search_type='{search_type}' dan k={k}...")
     
     # 1. Setup Konfigurasi Vektor
     device = "cuda" if torch.cuda.is_available() else "cpu"
