@@ -1,0 +1,33 @@
+# ==========================================
+# 1. CORE AI & ORCHESTRATION
+# ==========================================
+langchain>=0.1.0
+langchain-openai>=0.0.5     # Jika menggunakan model OpenAI (GPT-4o-mini / Text-Embedding-3)
+langgraph>=0.0.20
+# langchain-community       # Opsional: Jika butuh tool spesifik dari komunitas
+
+# ==========================================
+# 2. VECTOR DATABASE & INGESTION
+# ==========================================
+chromadb>=0.4.22            # Vector database pilihan untuk arsitektur ini
+pypdf>=4.0.0                # Untuk membaca dan mengekstrak teks dari jurnal/dokumen PDF
+tiktoken>=0.5.2             # Tokenizer yang sangat krusial untuk chunking teks secara akurat
+
+# ==========================================
+# 3. BACKEND (TRANSPORT LAYER)
+# ==========================================
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0   # ASGI Server untuk menjalankan FastAPI
+pydantic>=2.5.0             # Untuk validasi data (sudah otomatis terinstal via FastAPI, tapi baik untuk dicatat)
+
+# ==========================================
+# 4. FRONTEND (PRESENTATION LAYER)
+# ==========================================
+streamlit>=1.31.0
+
+# ==========================================
+# 5. UTILITIES & TOOLS
+# ==========================================
+python-dotenv>=1.0.1        # Untuk memuat API Keys dari file .env secara aman
+requests>=2.31.0            # Untuk melakukan HTTP Call ke API Nutrisi eksternal
+httpx>=0.26.0               # Alternatif modern untuk asynchronous API calls
