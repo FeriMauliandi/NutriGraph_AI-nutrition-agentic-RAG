@@ -2,24 +2,22 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List
 
-# Mengimpor Graph/Workflow LangGraph yang sudah dicompile dari folder src
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.agents.graph import app as ai_agent_app
+from langchain_core.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
 
-# ==========================================
-# INISIALISASI FASTAPI
-# ==========================================
+set_llm_cache(SQLiteCache(database_path="data/cache/langchain_cache.db"))
+
+
 app = FastAPI(
     title="Dietary Tracker Multi-Agent API",
     description="API untuk analisis nutrisi otonom menggunakan LangGraph & Groq",
     version="1.0.0"
 )
 
-# ==========================================
-# SCHEMAS (VALIDASI DATA DENGAN PYDANTIC)
-# ==========================================
 class DietRequest(BaseModel):
     user_input: str
 
@@ -27,9 +25,6 @@ class DietResponse(BaseModel):
     extracted_items: List[str]
     final_analysis: str
 
-# ==========================================
-# ENDPOINTS
-# ==========================================
 @app.get("/")
 def read_root():
     return {"message": "Dietary Tracker Agent API berjalan dengan lancar! 🚀"}

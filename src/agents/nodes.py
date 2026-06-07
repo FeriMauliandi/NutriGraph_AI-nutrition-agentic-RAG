@@ -57,14 +57,23 @@ def synthesizer_node(state: DietaryTrackerState) -> Dict[str, Any]:
     print("[Synthesizer Node] Merumuskan analisis akhir...")
     prompt = PromptTemplate.from_template(
         "Kamu adalah konsultan kebugaran dan nutrisi berbasis sains.\n\n"
-        "Berdasarkan Makanan yang dikonsumsi: {items}\n"
+        "Input Asli Pengguna: '{user_input}'\n"
+        "Makanan yang diekstrak: {items}\n"
         "Data Nutrisi (Estimasi): {nutrition}\n"
-        "Literatur nutrisi Pendukung jika data tidak cukup: {context}\n\n"
-        "Berikan analisis nutrisi per item untuk pengguna dan jelaskan apakah asupannya sudah ideal? "
-        "Gunakan bahasa Indonesia yang profesional dan singkat. Sertakan rekomendasi jika ada kekurangan nutrisi."
+        "Literatur nutrisi Pendukung: {context}\n\n"
+        "Tugas Utama:\n"
+        "1. Berikan analisis nutrisi per item secara singkat.\n"
+        "2. Jelaskan apakah asupannya sudah ideal DENGAN MEMPERHATIKAN KONTEKS WAKTU MAKAN pada 'Input Asli Pengguna'.\n"
+        "   - Jika pengguna hanya menyebut 'sarapan', 'makan siang', atau 1 sesi makan, evaluasilah target nutrisinya sebagai porsi satu kali makan (sekitar 1/3 dari kebutuhan harian).\n"
+        "   - JANGAN menyebut asupannya 'belum ideal untuk harian' jika dia memang baru makan satu kali.\n"
+        "   - Jika pengguna merangkum makanan seharian penuh, barulah evaluasi sebagai total asupan harian.\n\n"
+        "Gunakan bahasa Indonesia yang profesional, ramah, dan ringkas. Beri saran pelengkap jika ada nutrisi yang kurang dari sesi makan tersebut."
     )
     chain = prompt | llm
+    
+    # Kita tambahkan user_input ke dalam dictionary invoke
     response = chain.invoke({
+        "user_input": state.get("user_input", ""), # <-- Mengambil konteks asli
         "items": ", ".join(state.get("extracted_items", [])),
         "nutrition": state.get("nutrition_data", {}).get("summary", "Data tidak tersedia"),
         "context": state.get("literature_context", "Tidak ada referensi.")

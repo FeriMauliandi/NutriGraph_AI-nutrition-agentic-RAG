@@ -7,16 +7,14 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers import EnsembleRetriever, ContextualCompressionRetriever, MultiQueryRetriever
 from langchain_core.documents import Document
 from src.core.config import settings
+from src.utils.embeddings import get_cached_embeddings
 
 def get_retriever(llm, search_type="similarity", final_k=3, fetch_k=3):
     print(f"Menyiapkan Advanced Retriever (Multi-Query + Hybrid + Reranker)...")
     
     # 1. Setup Konfigurasi Vektor
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    embeddings = HuggingFaceEmbeddings(
-        model_name=settings.EMBEDDING_MODEL, 
-        model_kwargs={"device": device}
-    )
+    embeddings = get_cached_embeddings()
     
     vector_store = Chroma(
         persist_directory=settings.CHROMA_DB_DIR, 
