@@ -13,6 +13,7 @@ from src.agents.nodes import (
     extraction_node,
     clarification_node,
     api_tool_node,
+    self_correction_node,
     rag_node,
     synthesizer_node
 )
@@ -29,6 +30,16 @@ def route_clarification(state: DietaryTrackerState):
         return "clarify"
     return "analyze"
 
+def route_api_check(state: DietaryTrackerState):
+    """Mengevaluasi apakah perlu mencoba ulang (Self-Correction) atau lanjut."""
+    is_success = state.get("api_success", True)
+    retry_count = state.get("retry_count", 0)
+    
+    # Batasi maksimal 2 kali retry agar tidak infinite loop
+    if not is_success and retry_count < 2:
+        return "self_correction"
+    return "rag"
+
 # Inisialisasi StateGraph
 workflow = StateGraph(DietaryTrackerState)
 
@@ -38,6 +49,7 @@ workflow.add_node("general_chat", general_chat_node)
 workflow.add_node("extraction", extraction_node)
 workflow.add_node("clarification", clarification_node)
 workflow.add_node("api_tool", api_tool_node)
+workflow.add_node("self_correction", self_correction_node)
 workflow.add_node("rag", rag_node)
 workflow.add_node("synthesizer", synthesizer_node)
 
@@ -67,6 +79,17 @@ workflow.add_conditional_edges(
         "analyze": "api_tool"
     }
 )
+
+workflow.add_conditional_edges(
+    "api_tool",
+    route_api_check,
+    {
+        "self_correction": "self_correction",
+        "rag": "rag"
+    }
+)
+
+workflow.add_edge("self_correction", "extraction")
 
 workflow.add_edge("api_tool", "rag")
 workflow.add_edge("rag", "synthesizer")

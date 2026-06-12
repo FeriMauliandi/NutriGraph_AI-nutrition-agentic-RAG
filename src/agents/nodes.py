@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from langchain_groq import ChatGroq
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
+from langchain_community.tools import DuckDuckGoSearchRun
 
 from src.agents.state import DietaryTrackerState
 from src.core.config import settings
@@ -178,12 +179,30 @@ def general_chat_node(state: DietaryTrackerState) -> Dict[str, Any]:
     try:
         docs = chat_retriever.invoke(user_input)
         context = "\n\n".join(doc.page_content for doc in docs) or "Tidak ada literatur."
+        print(f"[General Chat Node] Ditemukan {len(docs)} dokumen untuk konteks. dan konteks: {context}...")
     except Exception as e:
         print(f"Error RAG: {e}")
         context = "Gagal ambil database."
 
+    used_web_search = False
+    if not context or len(docs) == 0:
+        print("🌐 [General Chat Node] RAG lokal tidak cukup. Memicu Agen Web Search (DuckDuckGo)...")
+        try:
+            search_tool = DuckDuckGoSearchRun()
+            web_query = f"{user_input}"
+            
+            context = search_tool.invoke(web_query)
+            used_web_search = True
+            print(f"🌐 [Web Search] Berhasil menarik data dari internet.")
+        except Exception as e:
+            print(f"⚠️ Error Web Search: {e}")
+            context = "Gagal mengambil data dari database lokal maupun internet."
+
+    # Tentukan label sumber untuk LLM
+    source_label = "INTERNET (WEB SEARCH)" if used_web_search else "DATABASE LOKAL (RAG)"
+
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Asisten gizi. Jawab ringkas & sopan. Gunakan literatur jika relevan.\nLiteratur: {context}"),
+        ("system", "Asisten gizi. Jawab ringkas & sopan. Gunakan literatur jika relevan.\nLiteratur: {context} jika tidak ada gunakan sumber referensi dari {source_label}.\n\n"),
         MessagesPlaceholder(variable_name="messages"),
         ("human", "{user_input}"),
     ])
@@ -191,13 +210,14 @@ def general_chat_node(state: DietaryTrackerState) -> Dict[str, Any]:
     response = (prompt | llm).invoke({
         "user_input": user_input,
         "context": context,
+        "source_label": source_label,
         "messages": messages,
     })
 
     new_messages = messages + [HumanMessage(content=user_input), AIMessage(content=response.content)]
     return {
         "final_analysis": response.content,
-        "literature_context": context,
+        "literature_context": f"[Sumber: {source_label}]\n{context}",
         "messages": new_messages,
     }
 
@@ -300,9 +320,28 @@ def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
         return {"nutrition_data": {"summary": "Tidak ada data."}}
 
     nutrition_result = fetch_combined_nutrition_data(items_data)
-    print(f"[API Tool Node] Hasil: {nutrition_result}")
-    return {"nutrition_data": nutrition_result}
 
+    summary = nutrition_result.get("summary", "")
+    is_success = "0.0 Kalori" not in summary
+
+    print(f"[API Tool Node] Hasil: {nutrition_result} | Success: {is_success}")
+    return {"nutrition_data": nutrition_result,
+            "api_success": is_success,
+            }
+
+def self_correction_node(state: DietaryTrackerState) -> Dict[str, Any]:
+    current_retry = state.get("retry_count", 0)
+    print(f"🔄 [Self-Correction Node] Pencarian gagal (Retry ke-{current_retry + 1}). Meminta LLM mencari sinonim...")
+    
+    correction_msg = HumanMessage(
+        content="Sistem API gagal menemukan makanan dengan nama tersebut. Tolong ekstrak ulang menggunakan sinonim, nama bahan dasar mentahnya, atau istilah bahasa Inggris yang jauh lebih umum."
+    )
+    
+    return {
+        "retry_count": current_retry + 1,
+        "extracted_items": [],
+        "messages": [correction_msg] 
+    }
 
 def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
     """Retrieve supporting nutrition literature via hybrid search."""
@@ -321,6 +360,7 @@ def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
     try:
         docs = diet_retriever.invoke(search_query)
         context = "\n\n".join(doc.page_content for doc in docs) or "Tidak ada literatur."
+        print(f"[RAG Node] Ditemukan {len(docs)} dokumen untuk konteks. dan konteks: {context}...")
         return {"literature_context": context}
     except Exception as e:
         print(f"RAG Error: {e}")

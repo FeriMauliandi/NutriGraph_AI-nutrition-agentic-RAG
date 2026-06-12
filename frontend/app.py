@@ -1,8 +1,9 @@
 import streamlit as st
 import requests
+import os
 
-# Konfigurasi endpoint FastAPI yang sudah kita buat
-API_URL = "http://127.0.0.1:8000/api/v1/analyze"
+# Konfigurasi endpoint FastAPI (Gunakan environment variable jika ada, default ke localhost)
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/api/v1/analyze")
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(

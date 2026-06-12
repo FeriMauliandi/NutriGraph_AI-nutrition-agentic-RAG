@@ -50,3 +50,56 @@ Input Pengguna → 🚦 Router Node (Intent Classification)
           └───────────┬───────────┘
                       ↓
                Jawaban Akhir
+
+---
+
+## 🐳 Menjalankan dengan Docker
+
+Proyek ini sudah dilengkapi **Dockerfile multi-stage** (image ramping untuk backend FastAPI) dan `Dockerfile.frontend` khusus Streamlit, serta `docker-compose.yml` untuk orkestrasi keduanya.
+
+### Prasyarat
+- [Docker](https://docs.docker.com/get-docker/) ≥ 20.10
+- [Docker Compose](https://docs.docker.com/compose/install/) v2
+- File `.env` berisi API key (lihat `.env.example`)
+
+### Build & Jalankan
+```bash
+# 1. Salin template env dan isi API key Anda
+cp .env.example .env
+# (Edit file .env lalu isi GROQ_API_KEY, USDA_API_KEY, dll.)
+
+# 2. Build image & jalankan semua service
+docker compose up -d --build
+
+# 3. Cek log
+docker compose logs -f backend
+docker compose logs -f frontend
+```
+
+Setelah container hidup:
+| Service  | URL                                       |
+|----------|-------------------------------------------|
+| Backend  | http://localhost:8000                     |
+| Frontend | http://localhost:8501                     |
+| API Docs | http://localhost:8000/docs                |
+
+### Hanya Backend
+```bash
+docker build -t dietary-tracker-backend .
+docker run --rm -p 8000:8000 --env-file .env -v ${PWD}/data:/app/data dietary-tracker-backend
+```
+
+### Ingest data (ChromaDB) di dalam container
+```bash
+docker compose exec backend python script/ingest_data.py
+```
+
+### Hentikan & bersihkan
+```bash
+docker compose down            # stop container
+docker compose down -v         # stop + hapus volume (ChromaDB, cache, dll.)
+```
+
+### Catatan
+- **GPU tidak digunakan** di dalam image; embedding `Qwen3-Embedding-0.6B` berjalan di CPU (`device="cpu"` di fallback `ingest_data.py`). Untuk GPU, install `nvidia-container-toolkit` lalu tambahkan `runtime: nvidia` pada service `backend`.
+- Folder `data/chroma_db` dan `data/cache` di-mount sebagai **named volume** agar persist antar restart.

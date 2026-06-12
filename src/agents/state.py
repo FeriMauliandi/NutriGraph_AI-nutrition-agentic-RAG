@@ -12,6 +12,8 @@ class DietaryTrackerState(TypedDict):
     needs_clarification: bool
     clarification_question: str
     nutrition_data: Dict[str, Any]
+    api_success: bool
+    retry_count: int
     literature_context: str
     final_analysis: str
     error_logs: Optional[List[str]]
