@@ -26,6 +26,7 @@ class DietResponse(BaseModel):
     extracted_items: List[str]
     final_analysis: str
     needs_clarification: bool = False
+    clarification_question: str = ""
 
 @app.get("/")
 def read_root():
@@ -45,9 +46,14 @@ async def analyze_diet(request: DietRequest):
         "messages": previous_values.get("messages", []) if pending_clarification else [],
         "extracted_items": previous_values.get("extracted_items", []) if pending_clarification else [],
         "needs_clarification": pending_clarification,
+        "clarification_question": previous_values.get("clarification_question", "") if pending_clarification else "",
         "nutrition_data": previous_values.get("nutrition_data", {}) if pending_clarification else {},
+        "nutrition_sources": previous_values.get("nutrition_sources", []) if pending_clarification else [],
         "literature_context": previous_values.get("literature_context", "") if pending_clarification else "",
+        "literature_sources": previous_values.get("literature_sources", []) if pending_clarification else [],
         "final_analysis": "",
+        "api_success": previous_values.get("api_success", True) if pending_clarification else True,
+        "retry_count": previous_values.get("retry_count", 0) if pending_clarification else 0,
         "error_logs": previous_values.get("error_logs", []) if pending_clarification else []
     }
     
@@ -58,7 +64,9 @@ async def analyze_diet(request: DietRequest):
         items_list = []
         for item in result_state.get("extracted_items", []):
             if isinstance(item, dict):
-                items_list.append(item.get("asli", ""))
+                quantity = int(item.get("quantity", 1) or 1)
+                item_name = item.get("asli", "")
+                items_list.append(f"{quantity}x {item_name}" if quantity > 1 else item_name)
             else:
                 items_list.append(item)
 
@@ -66,7 +74,8 @@ async def analyze_diet(request: DietRequest):
         return DietResponse(
             final_analysis=result_state["final_analysis"],
             extracted_items=items_list,
-            needs_clarification=result_state.get("needs_clarification", False)
+            needs_clarification=result_state.get("needs_clarification", False),
+            clarification_question=result_state.get("clarification_question", "")
         )
         
     except Exception as e:

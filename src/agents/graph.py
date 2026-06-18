@@ -15,11 +15,14 @@ from src.agents.nodes import (
     api_tool_node,
     self_correction_node,
     rag_node,
-    synthesizer_node
+    synthesizer_node,
+    likely_clarification_only
 )
 
 def route_intent(state: DietaryTrackerState):
     """Membaca state intent dan menentukan node selanjutnya"""
+    if state.get("needs_clarification") and state.get("extracted_items") and likely_clarification_only(state.get("user_input", "")):
+        return "clarification"
     if state.get("intent") == "track_diet":
         return "extraction"
     return "general_chat"
@@ -60,6 +63,7 @@ workflow.add_conditional_edges(
     "intent_router",
     route_intent,
     {
+        "clarification": "clarification",
         "extraction": "extraction",
         "general_chat": "general_chat"
     }

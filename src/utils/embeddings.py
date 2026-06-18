@@ -7,8 +7,7 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from src.core.config import settings
 
 def get_cached_embeddings():
-    # Gunakan CPU untuk menghindari CUDA OOM pada model embedding 0.6B di GPU terbatas
-    device = "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     
     # 1. Embedding inti (yang melakukan komputasi berat)
     underlying_embeddings = HuggingFaceEmbeddings(

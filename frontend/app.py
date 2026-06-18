@@ -7,12 +7,12 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/api/v1/analyze")
 
 # Konfigurasi Halaman Streamlit
 st.set_page_config(
-    page_title="Dietary Tracker AI",
+    page_title="NutriGraph AI",
     page_icon="🥗",
     layout="centered"
 )
 
-st.title("🥗 Agentic Dietary Tracker")
+st.title("🥗 NutriGraph AI: agentic nutrition tracker")
 st.markdown("""
 Asisten AI ini menggunakan Langchain advanced RAG (Vector + BM25) dan LangGraph multi-agent workflow untuk menganalisis asupan nutrisi Anda 
 berdasarkan input teks natural dan literatur jurnal medis.

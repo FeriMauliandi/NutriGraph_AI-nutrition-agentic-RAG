@@ -67,6 +67,21 @@ COMMON_TRANSLATIONS: Dict[str, str] = {
     "kol": "cabbage",
 }
 
+
+def _collect_source_labels(docs: List[Any], fallback_label: str) -> List[str]:
+    source_labels: List[str] = []
+
+    for doc in docs:
+        metadata = getattr(doc, "metadata", {}) or {}
+        source = str(metadata.get("source", "")).strip()
+        title = str(metadata.get("title", "")).strip()
+
+        label = title or source or fallback_label
+        if label and label not in source_labels:
+            source_labels.append(label)
+
+    return source_labels
+
 PORTION_PATTERN = re.compile(
     r"\b\d+\s*(porsi|piring|mangkuk|potong|gram|g|kg|gelas|buah|bungkus|sendok|sdm|sdt)\b"
     r"|\b(se)?(porsi|piring|mangkuk|gelas|bungkus|buah)\b",
@@ -90,7 +105,7 @@ TIME_PATTERN = re.compile(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def normalize_extracted_items(items: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+def normalize_extracted_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Deduplicate and normalize a list of extracted food items."""
     normalized: List[Dict[str, str]] = []
     seen: set = set()
@@ -106,9 +121,44 @@ def normalize_extracted_items(items: List[Dict[str, Any]]) -> List[Dict[str, str
         normalized.append({
             "asli": asli,
             "english": english or COMMON_TRANSLATIONS.get(asli, asli),
+            "quantity": int(item.get("quantity", 1) or 1),
         })
 
     return normalized
+
+
+def infer_item_quantities(user_input: str, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Infer simple numeric quantities from the original user input."""
+    text = user_input.lower()
+    enriched_items: List[Dict[str, Any]] = []
+
+    for item in items:
+        asli = item.get("asli", "")
+        english = item.get("english", "")
+        quantity = 1
+
+        escaped_variants = [re.escape(asli)]
+        if english and english != asli:
+            escaped_variants.append(re.escape(english))
+
+        for variant in escaped_variants:
+            patterns = [
+                rf"\b(\d+(?:[.,]\d+)?)\s*(?:butir|buah|porsi|sdm|sdt|gram|g|potong|lembar|sendok)?\s*{variant}\b",
+                rf"\b{variant}\s*(?:sebanyak\s*)?(\d+(?:[.,]\d+)?)\b",
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, text)
+                if match:
+                    quantity = int(float(match.group(1).replace(",", ".")))
+                    break
+            if quantity != 1:
+                break
+
+        enriched_item = dict(item)
+        enriched_item["quantity"] = max(quantity, 1)
+        enriched_items.append(enriched_item)
+
+    return enriched_items
 
 
 def likely_clarification_only(user_input: str) -> bool:
@@ -116,12 +166,13 @@ def likely_clarification_only(user_input: str) -> bool:
     text = PORTION_PATTERN.sub(" ", user_input.lower())
     text = TIME_PATTERN.sub(" ", text)
     text = CLARIFICATION_NOISE_PATTERN.sub(" ", text)
+    text = re.sub(r"\b(makan|minum|saya|aku|tadi|barusan|sudah|pada|waktu|jam|malam|pagi|siang|sore)\b", " ", text)
     text = re.sub(r"[^a-zA-Z\s-]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return not text
 
 
-def fallback_extract_items(user_input: str) -> List[Dict[str, str]]:
+def fallback_extract_items(user_input: str) -> List[Dict[str, Any]]:
     """Rule-based fallback extraction when the LLM structured output fails."""
     text = user_input.lower()
     text = re.sub(r"\b\d+\s*(porsi|piring|mangkuk|potong|gram|gelas|buah|bungkus)\b", "", text)
@@ -151,11 +202,11 @@ def intent_node(state: DietaryTrackerState) -> Dict[str, Any]:
     # If we're mid-clarification, continue tracking diet without re-classifying.
     if state.get("needs_clarification") and state.get("extracted_items"):
         print("[Router Node] Melanjutkan klarifikasi diet yang tertunda.")
-        return {"intent": "track_diet", "needs_clarification": False}
+        return {"intent": "track_diet", "needs_clarification": False, "clarification_question": ""}
 
     structured_llm = llm.with_structured_output(IntentClassification)
     prompt = ChatPromptTemplate.from_messages([
-        ("system", "Tentukan intent dari input pengguna. track_diet: jika ada detail makanan. general_chat: sapaan atau tanya nutrisi umum."),
+        ("system", "Tentukan intent dari input pengguna. track_diet: jika ada detail makanan. general_chat: sapaan atau tanya nutrisi umum. skip jika diluar konteks ini."),
         MessagesPlaceholder(variable_name="messages"),
         ("human", "{user_input}"),
     ])
@@ -175,14 +226,18 @@ def general_chat_node(state: DietaryTrackerState) -> Dict[str, Any]:
 
     user_input = state.get("user_input", "")
     messages = state.get("messages", [])
+    literature_sources: List[str] = []
+    docs = []
 
     try:
         docs = chat_retriever.invoke(user_input)
         context = "\n\n".join(doc.page_content for doc in docs) or "Tidak ada literatur."
+        literature_sources = _collect_source_labels(docs, "Database lokal")
         print(f"[General Chat Node] Ditemukan {len(docs)} dokumen untuk konteks. dan konteks: {context}...")
     except Exception as e:
         print(f"Error RAG: {e}")
         context = "Gagal ambil database."
+        literature_sources = []
 
     used_web_search = False
     if not context or len(docs) == 0:
@@ -193,10 +248,12 @@ def general_chat_node(state: DietaryTrackerState) -> Dict[str, Any]:
             
             context = search_tool.invoke(web_query)
             used_web_search = True
+            literature_sources = ["DuckDuckGo Web Search"]
             print(f"🌐 [Web Search] Berhasil menarik data dari internet.")
         except Exception as e:
             print(f"⚠️ Error Web Search: {e}")
             context = "Gagal mengambil data dari database lokal maupun internet."
+            literature_sources = []
 
     # Tentukan label sumber untuk LLM
     source_label = "INTERNET (WEB SEARCH)" if used_web_search else "DATABASE LOKAL (RAG)"
@@ -218,6 +275,7 @@ def general_chat_node(state: DietaryTrackerState) -> Dict[str, Any]:
     return {
         "final_analysis": response.content,
         "literature_context": f"[Sumber: {source_label}]\n{context}",
+        "literature_sources": literature_sources,
         "messages": new_messages,
     }
 
@@ -233,7 +291,7 @@ def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
     # If the user is only supplying clarification details, keep existing items.
     if existing_items and likely_clarification_only(user_input):
         print("[Extraction Node] Input hanya berisi detail klarifikasi; item lama dipertahankan.")
-        return {"extracted_items": normalize_extracted_items(existing_items)}
+        return {"extracted_items": infer_item_quantities(user_input, normalize_extracted_items(existing_items))}
 
     try:
         structured_llm = llm.with_structured_output(ExtractionResult)
@@ -260,6 +318,7 @@ def extraction_node(state: DietaryTrackerState) -> Dict[str, Any]:
         extracted_data = existing_items
 
     extracted_data = normalize_extracted_items(extracted_data)
+    extracted_data = infer_item_quantities(user_input, extracted_data)
     print(f"[Extraction Node] Hasil: {extracted_data}")
     return {"extracted_items": extracted_data}
 
@@ -285,6 +344,7 @@ def clarification_node(state: DietaryTrackerState) -> Dict[str, Any]:
             "needs_clarification": True,
             "clarification_question": "Apa yang Anda konsumsi?",
             "final_analysis": "Apa yang Anda konsumsi?",
+            "literature_sources": [],
         }
 
     has_portion = bool(PORTION_PATTERN.search(completeness_text))
@@ -292,7 +352,7 @@ def clarification_node(state: DietaryTrackerState) -> Dict[str, Any]:
     needs_clarification = not (has_portion and has_time)
 
     if not needs_clarification:
-        return {"needs_clarification": False}
+        return {"needs_clarification": False, "clarification_question": ""}
 
     main_item = items_data[0].get("asli", "makanan")
     if not has_portion and not has_time:
@@ -308,6 +368,7 @@ def clarification_node(state: DietaryTrackerState) -> Dict[str, Any]:
         "clarification_question": question,
         "final_analysis": question,
         "messages": new_messages,
+        "literature_sources": [],
     }
 
 
@@ -317,7 +378,7 @@ def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
 
     items_data = state.get("extracted_items", [])
     if not items_data:
-        return {"nutrition_data": {"summary": "Tidak ada data."}}
+        return {"nutrition_data": {"summary": "Tidak ada data."}, "nutrition_sources": []}
 
     nutrition_result = fetch_combined_nutrition_data(items_data)
 
@@ -327,6 +388,7 @@ def api_tool_node(state: DietaryTrackerState) -> Dict[str, Any]:
     print(f"[API Tool Node] Hasil: {nutrition_result} | Success: {is_success}")
     return {"nutrition_data": nutrition_result,
             "api_success": is_success,
+            "nutrition_sources": ["USDA FoodData Central API"],
             }
 
 def self_correction_node(state: DietaryTrackerState) -> Dict[str, Any]:
@@ -340,7 +402,9 @@ def self_correction_node(state: DietaryTrackerState) -> Dict[str, Any]:
     return {
         "retry_count": current_retry + 1,
         "extracted_items": [],
-        "messages": [correction_msg] 
+        "messages": [correction_msg],
+        "nutrition_sources": [],
+        "literature_sources": [],
     }
 
 def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
@@ -360,11 +424,12 @@ def rag_node(state: DietaryTrackerState) -> Dict[str, Any]:
     try:
         docs = diet_retriever.invoke(search_query)
         context = "\n\n".join(doc.page_content for doc in docs) or "Tidak ada literatur."
+        literature_sources = _collect_source_labels(docs, "Database lokal")
         print(f"[RAG Node] Ditemukan {len(docs)} dokumen untuk konteks. dan konteks: {context}...")
-        return {"literature_context": context}
+        return {"literature_context": context, "literature_sources": literature_sources}
     except Exception as e:
         print(f"RAG Error: {e}")
-        return {"literature_context": "", "error_logs": [str(e)]}
+        return {"literature_context": "", "literature_sources": [], "error_logs": [str(e)]}
 
 
 def synthesizer_node(state: DietaryTrackerState) -> Dict[str, Any]:
@@ -381,18 +446,31 @@ def synthesizer_node(state: DietaryTrackerState) -> Dict[str, Any]:
         "Data Nutrisi (Estimasi): {nutrition}\n"
         "Literatur Nutrisi Pendukung: {context}\n\n"
         "Tugas Utama:\n"
-        "1. Berikan analisis nutrisi per item secara singkat.\n"
+        "1. Berikan analisis nutrisi per item secara singkat dan jangan abaikan jumlah item.\n"
         "2. Jelaskan apakah asupannya sudah ideal DENGAN MEMPERHATIKAN KONTEKS WAKTU MAKAN.\n"
         "Gunakan bahasa Indonesia yang profesional dan ringkas. Beri saran pelengkap jika perlu."
     )
 
     response = (prompt | llm).invoke({
         "user_input": user_input,
-        "items": ", ".join(i["asli"] for i in state.get("extracted_items", [])),
+        "items": ", ".join(
+            f"{i.get('quantity', 1)}x {i['asli']}" if int(i.get("quantity", 1) or 1) > 1 else i["asli"]
+            for i in state.get("extracted_items", [])
+        ),
         "nutrition": state.get("nutrition_data", {}).get("summary", "N/A"),
         "context": state.get("literature_context", "N/A"),
         "messages": messages,
     })
 
+    citation_sources: List[str] = []
+    for source_list in (state.get("nutrition_sources", []), state.get("literature_sources", [])):
+        for source in source_list:
+            if source and source not in citation_sources:
+                citation_sources.append(source)
+
+    citation_block = ""
+    if citation_sources:
+        citation_block = "\n\nSumber:\n" + "\n".join(f"- {source}" for source in citation_sources)
+
     new_messages = messages + [HumanMessage(content=user_input), AIMessage(content=response.content)]
-    return {"final_analysis": response.content, "messages": new_messages}
+    return {"final_analysis": f"{response.content}{citation_block}", "messages": new_messages}
