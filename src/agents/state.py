@@ -4,13 +4,17 @@ from typing import Annotated
 
 from langgraph.graph.message import add_messages
 
-class DietaryTrackerState(TypedDict):
+class NutriGraphState(TypedDict):
     messages: Annotated[list, add_messages]
     user_input: str
+    image_data: Optional[str]
     intent: str
     extracted_items: List[Dict[str, Any]]
     needs_clarification: bool
     clarification_question: str
+    clarification_type: str
+    detected_from_image: bool
+    image_items_confirmed: bool
     nutrition_data: Dict[str, Any]
     nutrition_sources: List[str]
     api_success: bool

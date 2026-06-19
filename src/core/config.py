@@ -19,6 +19,7 @@ class Settings:
     # Konfigurasi Model
     LLM_MODEL = "openai/gpt-oss-20b"
     EMBEDDING_MODEL = "Qwen/Qwen3-Embedding-0.6B"
+    VLM_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # Inisialisasi objek settings agar bisa diimpor ke file lain
 settings = Settings()

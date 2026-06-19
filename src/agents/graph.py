@@ -6,7 +6,7 @@ root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
 sys.path.append(root_dir)
 
 # Import State dan Nodes yang sudah dibuat
-from src.agents.state import DietaryTrackerState
+from src.agents.state import NutriGraphState
 from src.agents.nodes import (
     intent_node,
     general_chat_node,
@@ -19,21 +19,25 @@ from src.agents.nodes import (
     likely_clarification_only
 )
 
-def route_intent(state: DietaryTrackerState):
+def route_intent(state: NutriGraphState):
     """Membaca state intent dan menentukan node selanjutnya"""
+    if state.get("needs_clarification") and state.get("clarification_type") in {"item_confirmation", "item_correction"}:
+        return "extraction"
+    if state.get("needs_clarification") and state.get("clarification_type") == "meal_time":
+        return "clarification"
     if state.get("needs_clarification") and state.get("extracted_items") and likely_clarification_only(state.get("user_input", "")):
         return "clarification"
     if state.get("intent") == "track_diet":
         return "extraction"
     return "general_chat"
 
-def route_clarification(state: DietaryTrackerState):
-    """Menentukan apakah workflow perlu berhenti untuk meminta detail porsi."""
+def route_clarification(state: NutriGraphState):
+    """Menentukan apakah workflow perlu berhenti untuk klarifikasi lanjutan."""
     if state.get("needs_clarification"):
         return "clarify"
     return "analyze"
 
-def route_api_check(state: DietaryTrackerState):
+def route_api_check(state: NutriGraphState):
     """Mengevaluasi apakah perlu mencoba ulang (Self-Correction) atau lanjut."""
     is_success = state.get("api_success", True)
     retry_count = state.get("retry_count", 0)
@@ -44,7 +48,7 @@ def route_api_check(state: DietaryTrackerState):
     return "rag"
 
 # Inisialisasi StateGraph
-workflow = StateGraph(DietaryTrackerState)
+workflow = StateGraph(NutriGraphState)
 
 # Daftarkan semua nodes
 workflow.add_node("intent_router", intent_node)

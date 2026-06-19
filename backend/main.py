@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 import sys
 import os
@@ -21,6 +21,7 @@ app = FastAPI(
 class DietRequest(BaseModel):
     user_input: str
     session_id: str = "default_user"
+    image_data: Optional[str] = None
 
 class DietResponse(BaseModel):
     extracted_items: List[str]
@@ -43,10 +44,14 @@ async def analyze_diet(request: DietRequest):
     
     initial_state = {
         "user_input": request.user_input,
+        "image_data": request.image_data,
         "messages": previous_values.get("messages", []) if pending_clarification else [],
         "extracted_items": previous_values.get("extracted_items", []) if pending_clarification else [],
         "needs_clarification": pending_clarification,
         "clarification_question": previous_values.get("clarification_question", "") if pending_clarification else "",
+        "clarification_type": previous_values.get("clarification_type", "") if pending_clarification else "",
+        "detected_from_image": previous_values.get("detected_from_image", False) if pending_clarification else bool(request.image_data),
+        "image_items_confirmed": previous_values.get("image_items_confirmed", False) if pending_clarification else False,
         "nutrition_data": previous_values.get("nutrition_data", {}) if pending_clarification else {},
         "nutrition_sources": previous_values.get("nutrition_sources", []) if pending_clarification else [],
         "literature_context": previous_values.get("literature_context", "") if pending_clarification else "",
