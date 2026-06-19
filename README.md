@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🥗 Dietary Tracker AI
+# 🥗 NutriGraph AI
 
 ### Intelligent Nutrition Tracking with Agentic RAG & LangGraph
 
