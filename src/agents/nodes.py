@@ -94,7 +94,7 @@ def normalize_extracted_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any
         result.append({
             "asli": name,
             "english": str(item.get("english", "")).strip().lower() or COMMON_TRANSLATIONS.get(name, name),
-            "quantity": int(item.get("quantity", 1) or 1),
+            "quantity": max(float(item.get("quantity", 1) or 1)) if item.get("quantity") is not None else 1.0,
         })
     return result
 
@@ -112,7 +112,7 @@ def infer_item_quantities(user_input: str, items: List[Dict[str, Any]]) -> List[
             ]:
                 m = re.search(pat, text)
                 if m:
-                    item["quantity"] = max(int(float(m.group(1).replace(",", "."))), 1)
+                    item["quantity"] = max(float(m.group(1).replace(",", ".")), 1.0)
                     break
     return items
 

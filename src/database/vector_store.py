@@ -56,6 +56,7 @@ def get_hybrid_retriever(search_type="similarity", final_k=3):
 def get_advanced_retriever(llm, search_type="similarity", final_k=3, fetch_k=5):
     print("Menyiapkan Advanced Retriever (MultiQuery + Hybrid + Reranker) untuk General Chat...")
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Device untuk model reranker: {device}")
     embeddings = get_cached_embeddings()
     vector_store = Chroma(persist_directory=settings.CHROMA_DB_DIR, embedding_function=embeddings)
     
