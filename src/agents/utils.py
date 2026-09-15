@@ -52,7 +52,7 @@ def normalize_extracted_items(items: List[Dict[str, Any]]) -> List[Dict[str, Any
         result.append({
             "asli": name,
             "english": str(item.get("english", "")).strip().lower() or COMMON_TRANSLATIONS.get(name, name),
-            "quantity": max(float(item.get("quantity", 1) or 1)) if item.get("quantity") is not None else 1.0,
+            "quantity": float(item.get("quantity", 1) or 1) if item.get("quantity") is not None else 1.0,
         })
     return result
 
