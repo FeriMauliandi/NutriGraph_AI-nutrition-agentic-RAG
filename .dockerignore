@@ -1,0 +1,35 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+
+# Python cache & build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Local cache & vector store (mounted via volume)
+data/chroma_db/
+data/cache/
+script/.cache/
+.cache/
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
