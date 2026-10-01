@@ -114,14 +114,28 @@ def extraction_node(state: NutriGraphState) -> Dict[str, Any]:
                     "final_analysis": "Mohon tuliskan item makanan yang benar pada gambar.", "detected_from_image": True}
 
         kept, replacement, is_partial = split_partial_item_correction(user_input, existing)
-        existing = kept if is_partial else []
-        user_input = replacement if is_partial else user_input
+        if is_partial == "add":
+            existing = kept
+            user_input = replacement
+        elif is_partial is True:
+            existing = kept
+            user_input = replacement
+        else:
+            existing = []
+            user_input = user_input
         image_data = None
 
     elif clr_type == "item_correction":
         kept, replacement, is_partial = split_partial_item_correction(user_input, existing)
-        existing = kept if is_partial else []
-        user_input = replacement if is_partial else user_input
+        if is_partial == "add":
+            existing = kept
+            user_input = replacement
+        elif is_partial is True:
+            existing = kept
+            user_input = replacement
+        else:
+            existing = []
+            user_input = user_input
         image_data = None
 
     if existing and likely_clarification_only(user_input):
@@ -158,9 +172,14 @@ def extraction_node(state: NutriGraphState) -> Dict[str, Any]:
         extracted_data = existing + [i for i in extracted_data if i["asli"] not in existing_names]
 
     extracted_data = infer_item_quantities(user_input, normalize_extracted_items(extracted_data))
-    result = {"extracted_items": extracted_data}
+    
+    full_text = combined_user_context(state)
+    time_match = RE_TIME.search(full_text)
+    meal_time = time_match.group(0) if time_match else state.get("meal_time", "")
 
-    print(f"Extracted items: {extracted_data}")
+    result = {"extracted_items": extracted_data, "meal_time": meal_time}
+
+    print(f"Extracted items: {extracted_data}, Meal time: {meal_time}")
 
     if image_data:
         result.update({"detected_from_image": True, "image_items_confirmed": False, "clarification_type": ""})
@@ -193,7 +212,7 @@ def clarification_node(state: NutriGraphState) -> Dict[str, Any]:
     if state.get("detected_from_image") and not state.get("image_items_confirmed"):
         detected = format_detected_items(items)
         q = (f"Saya mendeteksi item berikut dari gambar: {detected}. "
-             "Apakah item tersebut sudah benar? Jika belum, tuliskan koreksi dengan kata kunci 'diganti'.")
+             "Apakah item tersebut sudah benar? Jika belum, tuliskan koreksi dengan kata kunci 'diganti' dan jika ingin tambahkan dengan kata kunci 'tambah'.")
         return _reply(q, "item_confirmation")
 
     full_text = combined_user_context(state)

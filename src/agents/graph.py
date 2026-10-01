@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 import os, sys
 
 root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
@@ -99,10 +99,16 @@ workflow.add_conditional_edges(
 
 workflow.add_edge("self_correction", "extraction")
 
-workflow.add_edge("api_tool", "rag")
 workflow.add_edge("rag", "synthesizer")
 workflow.add_edge("synthesizer", END)
 
-# Tambahkan MemorySaver untuk checkpointing
-memory = MemorySaver()
+import sqlite3
+
+# Tambahkan SqliteSaver untuk persistent checkpointing
+db_dir = os.path.join(root_dir, "data", "checkpoints")
+os.makedirs(db_dir, exist_ok=True)
+db_path = os.path.join(db_dir, "checkpoints.sqlite")
+
+conn = sqlite3.connect(db_path, check_same_thread=False)
+memory = SqliteSaver(conn)
 app = workflow.compile(checkpointer=memory)

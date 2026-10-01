@@ -100,13 +100,25 @@ def format_detected_items(items: List[Dict[str, Any]]) -> str:
 
 
 def split_partial_item_correction(user_input: str, existing: List[Dict[str, Any]]):
+    text = user_input.lower().strip()
+    
+    # Cek penambahan item (tambah, plus, juga, ditambah)
+    add_patterns = [
+        r"\b(?:tambah|plus|serta|juga|ditambah)\s+(?:item\s+)?(.+)$",
+    ]
+    for pat in add_patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            addition = m.group(1).strip()
+            return existing, addition, "add"
+
     patterns = [
         r"\bbukan\s+(.+?)\s+(?:tetapi|tapi|melainkan|seharusnya|harusnya|yang benar)\s+(.+)$",
         r"\b(.+?)\s+diganti(?:\s+dengan)?\s+(.+)$",
         r"\bganti\s+(.+?)\s+dengan\s+(.+)$",
     ]
     for pat in patterns:
-        m = re.search(pat, user_input.lower().strip(), re.IGNORECASE)
+        m = re.search(pat, text, re.IGNORECASE)
         if m:
             wrong, replacement = m.group(1), m.group(2)
             wrong_names = {

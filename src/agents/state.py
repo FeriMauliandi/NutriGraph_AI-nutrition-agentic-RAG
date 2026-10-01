@@ -22,4 +22,5 @@ class NutriGraphState(TypedDict):
     literature_context: str
     literature_sources: List[str]
     final_analysis: str
+    meal_time: Optional[str]
     error_logs: Optional[List[str]]

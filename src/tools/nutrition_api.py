@@ -12,7 +12,7 @@ def get_usda_item(item_name: str) -> Dict[str, Any]:
     params = {"api_key": api_key, "query": item_name, "pageSize": 1}
 
     try:
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=10)
         response.raise_for_status()
         data = response.json()
 
@@ -30,8 +30,12 @@ def get_usda_item(item_name: str) -> Dict[str, Any]:
             )
 
             return {"found": True, "cal": cal, "pro": pro, "car": car, "source": "USDA"}
-    except Exception:
-        pass
+    except requests.exceptions.Timeout:
+        print(f"⚠️ USDA API Timeout saat mencari '{item_name}'")
+    except requests.exceptions.RequestException as e:
+        print(f"⚠️ USDA API Request Error saat mencari '{item_name}': {e}")
+    except Exception as e:
+        print(f"⚠️ Unexpected error saat memproses USDA API untuk '{item_name}': {e}")
 
     return {"found": False}
 
