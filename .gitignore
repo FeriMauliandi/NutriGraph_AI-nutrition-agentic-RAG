@@ -33,6 +33,7 @@ data/cache/
 
 # Vector Store local database (dibuat via script/ingest_data.py)
 data/chroma_db/
+data/checkpoints/
 
 # OS / Editor files
 .DS_Store
